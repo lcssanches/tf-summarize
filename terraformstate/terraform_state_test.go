@@ -32,6 +32,151 @@ func TestResourceChangeColor(t *testing.T) {
 	assert.Equal(t, color, ColorMagenta)
 }
 
+func TestGetAllResourceChanges(t *testing.T) {
+	input := []byte(`
+	{
+		"resource_changes": [
+			{
+				"address": "aws_instance.example1",
+				"change": {
+					"actions": ["create"]
+				}
+			},
+			{
+				"address": "aws_instance.example2",
+				"change": {
+					"actions": ["delete"]
+				}
+			},
+			{
+				"address": "aws_instance.example3",
+				"change": {
+					"actions": ["update"]
+				}
+			},
+			{
+				"address": "aws_instance.example4",
+				"change": {
+					"actions": ["create", "delete"]
+				}
+			},
+			{
+				"address": "aws_instance.example5",
+				"change": {
+					"importing": {
+						"id": "example5"
+					}
+				}
+			}
+		]
+	}`)
+
+	plan, err := Parse(input)
+	if err != nil {
+		t.Fatalf("failed to parse input: %v", err)
+	}
+
+	expected := map[string]ResourceChanges{
+		"import": {
+			&tfjson.ResourceChange{
+				Address: "aws_instance.example5",
+				Change: tfjson.Change{
+					Importing: &tfjson.Import{
+						ID: "example5",
+					},
+				},
+			},
+		},
+		"add": {
+			&tfjson.ResourceChange{
+				Address: "aws_instance.example1",
+				Change: tfjson.Change{
+					Actions: []string{"create"},
+				},
+			},
+		},
+		"delete": {
+			&tfjson.ResourceChange{
+				Address: "aws_instance.example2",
+				Change: tfjson.Change{
+					Actions: []string{"delete"},
+				},
+			},
+		},
+		"update": {
+			&tfjson.ResourceChange{
+				Address: "aws_instance.example3",
+				Change: tfjson.Change{
+					Actions: []string{"update"},
+				},
+			},
+		},
+		"recreate": {
+			&tfjson.ResourceChange{
+				Address: "aws_instance.example4",
+				Change: tfjson.Change{
+					Actions: []string{"create", "delete"},
+				},
+			},
+		},
+	}
+
+	result := GetAllResourceChanges(plan)
+
+	for key, expectedChanges := range expected {
+		if len(result[key]) != len(expectedChanges) {
+			t.Errorf("Expected length of %s to be %d, got %d", key, len(expectedChanges), len(result[key]))
+		}
+		for i, expectedChange := range expectedChanges {
+			if result[key][i].Address != expectedChange.Address {
+				t.Errorf("Expected %s address at index %d to be %s, got %s", key, i, expectedChange.Address, result[key][i].Address)
+			}
+		}
+	}
+}
+
+func TestGetAllOutputChanges(t *testing.T) {
+	input := []byte(`
+	{
+		"output_changes": {
+			"output1": {
+				"actions": ["create"]
+			},
+			"output2": {
+				"actions": ["delete"]
+			},
+			"output3": {
+				"actions": ["update"]
+			}
+		}
+	}`)
+
+	plan := tfjson.Plan{}
+	err := json.Unmarshal(input, &plan)
+	if err != nil {
+		t.Fatalf("failed to parse input: %v", err)
+	}
+
+	expected := map[string][]string{
+		"add":    {"output1"},
+		"delete": {"output2"},
+		"update": {"output3"},
+	}
+
+	result := GetAllOutputChanges(plan)
+
+	for key, expectedOutputs := range expected {
+		if len(result[key]) != len(expectedOutputs)) {
+			t.Errorf("Expected length of %s to be %d, got %d", key, len(expectedOutputs), len(result[key]))
+		}
+		for i, expectedOutput := range expectedOutputs {
+			if result[key][i] != expectedOutput {
+				t.Errorf("Expected %s output at index %d to be %s, got %s", key, i, expectedOutput, result[key][i])
+			}
+		}
+	}
+}
+
 func TestResourceChangeSuffix(t *testing.T) {
 	ExpectedSuffix := map[Action]string{
 		ActionCreate: "(+)",

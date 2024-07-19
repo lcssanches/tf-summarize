@@ -166,7 +166,7 @@ func TestGetAllOutputChanges(t *testing.T) {
 	result := GetAllOutputChanges(plan)
 
 	for key, expectedOutputs := range expected {
-		if len(result[key]) != len(expectedOutputs)) {
+		if (len(result[key]) != len(expectedOutputs)) {
 			t.Errorf("Expected length of %s to be %d, got %d", key, len(expectedOutputs), len(result[key]))
 		}
 		for i, expectedOutput := range expectedOutputs {

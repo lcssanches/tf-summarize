@@ -33,148 +33,71 @@ func TestResourceChangeColor(t *testing.T) {
 }
 
 func TestGetAllResourceChanges(t *testing.T) {
-	input := []byte(`
-	{
-		"resource_changes": [
-			{
-				"address": "aws_instance.example1",
-				"change": {
-					"actions": ["create"]
-				}
-			},
-			{
-				"address": "aws_instance.example2",
-				"change": {
-					"actions": ["delete"]
-				}
-			},
-			{
-				"address": "aws_instance.example3",
-				"change": {
-					"actions": ["update"]
-				}
-			},
-			{
-				"address": "aws_instance.example4",
-				"change": {
-					"actions": ["create", "delete"]
-				}
-			},
-			{
-				"address": "aws_instance.example5",
-				"change": {
-					"importing": {
-						"id": "example5"
-					}
-				}
-			}
-		]
-	}`)
+	resourceChanges := ResourceChanges{
+		&ResourceChange{Address: "create2", Change: &Change{Actions: Actions{ActionCreate}}},
+		&ResourceChange{Address: "create1", Change: &Change{Actions: Actions{ActionCreate}}},
+		&ResourceChange{Address: "delete2", Change: &Change{Actions: Actions{ActionDelete}}},
+		&ResourceChange{Address: "delete1", Change: &Change{Actions: Actions{ActionDelete}}},
+		&ResourceChange{Address: "update2", Change: &Change{Actions: Actions{ActionUpdate}}},
+		&ResourceChange{Address: "update1", Change: &Change{Actions: Actions{ActionUpdate}}},
+		&ResourceChange{Address: "import2", Change: &Change{Importing: &Importing{ID: "id1"}}},
+		&ResourceChange{Address: "import1", Change: &Change{Importing: &Importing{ID: "id2"}}},
 
-	plan, err := Parse(input)
-	if err != nil {
-		t.Fatalf("failed to parse input: %v", err)
+		&ResourceChange{Address: "recreate2", Change: &Change{Actions: Actions{ActionDelete, ActionCreate}}},
+		&ResourceChange{Address: "recreate1", Change: &Change{Actions: Actions{ActionDelete, ActionCreate}}},
 	}
-
-	expected := map[string]ResourceChanges{
-		"import": {
-			&tfjson.ResourceChange{
-				Address: "aws_instance.example5",
-				Change: tfjson.Change{
-					Importing: &tfjson.Import{
-						ID: "example5",
-					},
-				},
-			},
-		},
-		"add": {
-			&tfjson.ResourceChange{
-				Address: "aws_instance.example1",
-				Change: tfjson.Change{
-					Actions: []string{"create"},
-				},
-			},
-		},
-		"delete": {
-			&tfjson.ResourceChange{
-				Address: "aws_instance.example2",
-				Change: tfjson.Change{
-					Actions: []string{"delete"},
-				},
-			},
-		},
-		"update": {
-			&tfjson.ResourceChange{
-				Address: "aws_instance.example3",
-				Change: tfjson.Change{
-					Actions: []string{"update"},
-				},
-			},
-		},
-		"recreate": {
-			&tfjson.ResourceChange{
-				Address: "aws_instance.example4",
-				Change: tfjson.Change{
-					Actions: []string{"create", "delete"},
-				},
-			},
-		},
-	}
+	plan := tfjson.Plan{ResourceChanges: resourceChanges}
 
 	result := GetAllResourceChanges(plan)
 
-	for key, expectedChanges := range expected {
-		if len(result[key]) != len(expectedChanges) {
-			t.Errorf("Expected length of %s to be %d, got %d", key, len(expectedChanges), len(result[key]))
-		}
-		for i, expectedChange := range expectedChanges {
-			if result[key][i].Address != expectedChange.Address {
-				t.Errorf("Expected %s address at index %d to be %s, got %s", key, i, expectedChange.Address, result[key][i].Address)
-			}
-		}
+	expectedResourceChanges := map[string]ResourceChanges{
+		"add": {
+			&ResourceChange{Address: "create1", Change: &Change{Actions: Actions{ActionCreate}}},
+			&ResourceChange{Address: "create2", Change: &Change{Actions: Actions{ActionCreate}}},
+		},
+		"delete": {
+			&ResourceChange{Address: "delete1", Change: &Change{Actions: Actions{ActionDelete}}},
+			&ResourceChange{Address: "delete2", Change: &Change{Actions: Actions{ActionDelete}}},
+		},
+		"update": {
+			&ResourceChange{Address: "update1", Change: &Change{Actions: Actions{ActionUpdate}}},
+			&ResourceChange{Address: "update2", Change: &Change{Actions: Actions{ActionUpdate}}},
+		},
+		"recreate": {
+			&ResourceChange{Address: "recreate1", Change: &Change{Actions: Actions{ActionDelete, ActionCreate}}},
+			&ResourceChange{Address: "recreate2", Change: &Change{Actions: Actions{ActionDelete, ActionCreate}}},
+		},
+		"import": {
+			&ResourceChange{Address: "import1", Change: &Change{Importing: &Importing{ID: "id2"}}},
+			&ResourceChange{Address: "import2", Change: &Change{Importing: &Importing{ID: "id1"}}},
+		},
 	}
+
+	assert.Equal(t, expectedResourceChanges, result)
 }
 
 func TestGetAllOutputChanges(t *testing.T) {
-	input := []byte(`
-	{
-		"output_changes": {
-			"output1": {
-				"actions": ["create"]
-			},
-			"output2": {
-				"actions": ["delete"]
-			},
-			"output3": {
-				"actions": ["update"]
-			}
-		}
-	}`)
 
-	plan := tfjson.Plan{}
-	err := json.Unmarshal(input, &plan)
-	if err != nil {
-		t.Fatalf("failed to parse input: %v", err)
+	outputChanges := map[string]*Change{
+		"create2": {Actions: Actions{ActionCreate}},
+		"create1": {Actions: Actions{ActionCreate}},
+		"delete2": {Actions: Actions{ActionDelete}},
+		"delete1": {Actions: Actions{ActionDelete}},
+		"update2": {Actions: Actions{ActionUpdate}},
+		"update1": {Actions: Actions{ActionUpdate}},
 	}
 
-	expected := map[string][]string{
-		"add":    {"output1"},
-		"delete": {"output2"},
-		"update": {"output3"},
-	}
+	plan := tfjson.Plan{OutputChanges: outputChanges}
 
 	result := GetAllOutputChanges(plan)
 
-	for key, expectedOutputs := range expected {
-		if (len(result[key]) != len(expectedOutputs)) {
-			t.Errorf("Expected length of %s to be %d, got %d", key, len(expectedOutputs), len(result[key]))
-		}
-		for i, expectedOutput := range expectedOutputs {
-			if result[key][i] != expectedOutput {
-				t.Errorf("Expected %s output at index %d to be %s, got %s", key, i, expectedOutput, result[key][i])
-			}
-		}
+	expectedResourceChanges := map[string][]string{
+		"add":    {"create1", "create2"},
+		"delete": {"delete1", "delete2"},
+		"update": {"update1", "update2"},
 	}
+
+	assert.Equal(t, expectedResourceChanges, result)
 }
 
 func TestResourceChangeSuffix(t *testing.T) {

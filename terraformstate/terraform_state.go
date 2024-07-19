@@ -108,7 +108,7 @@ func GetAllResourceChanges(plan tfjson.Plan) map[string]ResourceChanges {
 	recreatedResources := recreatedResources(plan.ResourceChanges)
 	importedResources := importedResources(plan.ResourceChanges)
 
-	sortResources := func(resources []ResourceChanges) {
+	sortResources := func(resources ResourceChanges) {
 		sort.Slice(resources, func(i, j int) bool {
 			return resources[i].Address < resources[j].Address
 		})
